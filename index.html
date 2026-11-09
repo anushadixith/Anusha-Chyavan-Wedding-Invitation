@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#28131d">
-<title>Anusha & Chyavan | A Royal Wedding Invitation</title>
+<title>Anusha & Chyavan Wedding Invitation</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&family=Cormorant+Garamond:wght@400;500;600;700&family=Allura&family=Montserrat:wght@400;500;600&display=swap');
 :root{--wine:#123f3d;--wine2:#082b2b;--gold:#d9b56e;--pale:#fff8e9;--cream:#f4e7ca;--ink:#193b38;--blue:#174d58;--coral:#a94e3c}
@@ -75,11 +75,190 @@ window.addEventListener('load',()=>setTimeout(openDoors,700));
 document.querySelector('.enter').addEventListener('click',function(e){e.stopPropagation();enterCelebration();});
 const panels=document.querySelectorAll('.panel');const io=new IntersectionObserver(entries=>entries.forEach(e=>{if(e.isIntersecting){e.target.classList.add('show');io.unobserve(e.target)}}),{threshold:.12});panels.forEach(p=>io.observe(p));
 // Scratch-to-reveal gold foil canvases
-function setupScratch(card){const c=card.querySelector('canvas'),ctx=c.getContext('2d');let drawing=false,erased=0;function size(){const r=card.getBoundingClientRect(),dpr=Math.min(devicePixelRatio||1,2);c.width=r.width*dpr;c.height=r.height*dpr;c.style.width=r.width+'px';c.style.height=r.height+'px';ctx.setTransform(dpr,0,0,dpr,0,0);const g=ctx.createLinearGradient(0,0,r.width,r.height);g.addColorStop(0,'#e9d3a5');g.addColorStop(.5,'#c99a53');g.addColorStop(1,'#f0dfb8');ctx.fillStyle=g;ctx.fillRect(0,0,r.width,r.height);ctx.fillStyle='#704324';ctx.textAlign='center';ctx.font='600 13px Montserrat';ctx.fillText('A LITTLE SURPRISE',r.width/2,r.height/2-10);ctx.font='30px Georgia';ctx.fillText('✧  ✦  ✧',r.width/2,r.height/2+28);ctx.globalCompositeOperation='destination-out';}
-function point(e){const r=c.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top}}
-function scratch(e){if(!drawing)return;e.preventDefault();const p=point(e);const radius=Math.max(30,Math.min(42,c.width/c.clientWidth*30));ctx.beginPath();ctx.arc(p.x,p.y,radius,0,Math.PI*2);ctx.fill();erased++;if(erased>=10){card.classList.add('done');}}
-c.addEventListener('pointerdown',e=>{drawing=true;c.setPointerCapture(e.pointerId);scratch(e)});c.addEventListener('pointermove',scratch);['pointerup','pointercancel','pointerleave'].forEach(ev=>c.addEventListener(ev,()=>drawing=false));size();window.addEventListener('resize',()=>{if(!card.classList.contains('done'))size()});}
+
+// Smooth and sensitive scratch-to-reveal cards
+function setupScratch(card) {
+  const canvas = card.querySelector('canvas');
+  if (!canvas) return;
+
+  const ctx = canvas.getContext('2d', {
+    willReadFrequently: true
+  });
+
+  let drawing = false;
+  let lastPoint = null;
+  let checkCounter = 0;
+  let revealed = false;
+
+  function paintFoil() {
+    const rect = card.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+    canvas.width = Math.round(rect.width * dpr);
+    canvas.height = Math.round(rect.height * dpr);
+    canvas.style.width = rect.width + 'px';
+    canvas.style.height = rect.height + 'px';
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.globalCompositeOperation = 'source-over';
+
+    const foil = ctx.createLinearGradient(
+      0, 0, rect.width, rect.height
+    );
+
+    foil.addColorStop(0, '#f2dfb8');
+    foil.addColorStop(0.48, '#c99a53');
+    foil.addColorStop(1, '#ead3a3');
+
+    ctx.fillStyle = foil;
+    ctx.fillRect(0, 0, rect.width, rect.height);
+
+    ctx.fillStyle = '#704324';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = '600 13px Montserrat, sans-serif';
+
+    ctx.fillText(
+      'A LITTLE SURPRISE',
+      rect.width / 2,
+      rect.height / 2 - 13
+    );
+
+    ctx.font = '30px Georgia, serif';
+
+    ctx.fillText(
+      '✧  ✦  ✧',
+      rect.width / 2,
+      rect.height / 2 + 23
+    );
+
+    ctx.globalCompositeOperation = 'destination-out';
+  }
+
+  function getPoint(event) {
+    const rect = canvas.getBoundingClientRect();
+
+    return {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top
+    };
+  }
+
+  function eraseSegment(point) {
+    ctx.save();
+
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 54;
+
+    ctx.beginPath();
+
+    if (lastPoint) {
+      ctx.moveTo(lastPoint.x, lastPoint.y);
+      ctx.lineTo(point.x, point.y);
+    } else {
+      ctx.moveTo(point.x, point.y);
+      ctx.lineTo(point.x + 0.1, point.y + 0.1);
+    }
+
+    ctx.stroke();
+
+    // Round scratch mark for easy tapping
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, 27, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+
+    lastPoint = point;
+  }
+
+  function erasedEnough() {
+    const w = canvas.width;
+    const h = canvas.height;
+
+    const pixels = ctx.getImageData(
+      0, 0, w, h
+    ).data;
+
+    const stepX = Math.max(1, Math.floor(w / 90));
+    const stepY = Math.max(1, Math.floor(h / 90));
+
+    let samples = 0;
+    let transparent = 0;
+
+    for (let y = 0; y < h; y += stepY) {
+      for (let x = 0; x < w; x += stepX) {
+        samples++;
+
+        if (pixels[(y * w + x) * 4 + 3] < 80) {
+          transparent++;
+        }
+      }
+    }
+
+    return samples > 0 &&
+      transparent / samples >= 0.38;
+  }
+
+  function finishIfReady() {
+    if (revealed || ++checkCounter % 5 !== 0) return;
+
+    if (erasedEnough()) {
+      revealed = true;
+      drawing = false;
+
+      card.classList.add('done');
+
+      ctx.clearRect(
+        0, 0, canvas.width, canvas.height
+      );
+    }
+  }
+
+  canvas.addEventListener('pointerdown', event => {
+    if (revealed) return;
+
+    event.preventDefault();
+    drawing = true;
+    lastPoint = null;
+
+    if (canvas.setPointerCapture) {
+      canvas.setPointerCapture(event.pointerId);
+    }
+
+    eraseSegment(getPoint(event));
+    finishIfReady();
+  });
+
+  canvas.addEventListener('pointermove', event => {
+    if (!drawing || revealed) return;
+
+    event.preventDefault();
+
+    eraseSegment(getPoint(event));
+    finishIfReady();
+  });
+
+  function stopDrawing() {
+    drawing = false;
+    lastPoint = null;
+    finishIfReady();
+  }
+
+  canvas.addEventListener('pointerup', stopDrawing);
+  canvas.addEventListener('pointercancel', stopDrawing);
+  canvas.addEventListener('lostpointercapture', stopDrawing);
+
+  requestAnimationFrame(paintFoil);
+}
+
+// Activate all scratch cards
 document.querySelectorAll('[data-scratch]').forEach(setupScratch);
+ 
 // Live countdown to the wedding muhurtham, local device time
 function tick(){const target=new Date(2026,11,6,8,25,0).getTime(),diff=Math.max(0,target-Date.now());const vals={days:Math.floor(diff/86400000),hours:Math.floor(diff%86400000/3600000),minutes:Math.floor(diff%3600000/60000),seconds:Math.floor(diff%60000/1000)};Object.entries(vals).forEach(([k,v])=>document.getElementById(k).textContent=String(v).padStart(2,'0'));}tick();setInterval(tick,1000);
 function petal(){const p=document.createElement('span');p.className='petal';p.textContent=Math.random()>.5?'✿':'❀';p.style.left=Math.random()*100+'vw';p.style.fontSize=(12+Math.random()*16)+'px';p.style.setProperty('--drift',(Math.random()*150-75)+'px');p.style.animationDuration=(9+Math.random()*9)+'s';document.body.appendChild(p);setTimeout(()=>p.remove(),19000)}setInterval(petal,1100);
